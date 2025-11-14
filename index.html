@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Quiz Galaxy 6.0 – Ascension Nexus Edition</title>
+
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&display=swap');
+  body {
+    margin: 0;
+    font-family: 'Orbitron', sans-serif;
+    color: #fff;
+    background: radial-gradient(circle at center, #0a0220, #02010c 80%);
+    overflow: hidden;
+  }
+  canvas {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    z-index: 0;
+  }
+  .container {
+    position: relative;
+    z-index: 2;
+    text-align: center;
+    padding: 20px;
+  }
+  h1 {
+    font-size: 2.2em;
+    color: #6af0ff;
+    text-shadow: 0 0 15px #4f00ff;
+  }
+  .quiz-box, .start-screen, .leaderboard {
+    background: rgba(30, 10, 60, 0.4);
+    border: 1px solid #6af0ff;
+    border-radius: 20px;
+    padding: 25px;
+    max-width: 600px;
+    margin: 30px auto;
+    box-shadow: 0 0 20px #4f00ff;
+    backdrop-filter: blur(6px);
+  }
+  button {
+    font-family: 'Orbitron';
+    background: linear-gradient(90deg, #4000ff, #7f00ff);
+    border: none;
+    color: white;
+    padding: 12px 30px;
+    border-radius: 10px;
+    cursor: pointer;
+    font-size: 1em;
+    margin-top: 15px;
+    transition: all 0.3s ease;
+  }
+  button:hover {
+    background: linear-gradient(90deg, #7f00ff, #00bfff);
+    box-shadow: 0 0 10px #00bfff;
+  }
+  .question { margin-bottom: 10px; font-size: 1.2em; color: #cfefff; }
+  .option { display: block; margin: 8px 0; }
+  input[type="radio"] { margin-right: 10px; }
+  .avatar-select img {
+    width: 60px; height: 60px;
+    border-radius: 50%;
+    margin: 10px;
+    border: 2px solid transparent;
+    transition: 0.3s;
+    cursor: pointer;
+  }
+  .avatar-select img.selected {
+    border: 2px solid #6af0ff;
+    box-shadow: 0 0 10px #6af0ff;
+  }
+</style>
+</head>
+
+<body>
+<canvas id="space"></canvas>
+
+<div class="container">
+  <div class="start-screen">
+    <h1>🌌 Quiz Galaxy 6.0 🌠</h1>
+    <p>Masukkan namamu, pilih avatar, dan tembus portal Nexus!</p>
+    <input type="text" id="playerName" placeholder="Nama kamu..." style="padding:10px;border-radius:10px;border:none;">
+    
+    <div class="avatar-select">
+      <img src="https://i.imgur.com/L3lW9yK.png" alt="A1" onclick="selectAvatar(this)">
+      <img src="https://i.imgur.com/X1a8MTe.png" alt="A2" onclick="selectAvatar(this)">
+      <img src="https://i.imgur.com/C2dDlGu.png" alt="A3" onclick="selectAvatar(this)">
+    </div>
+
+    <button onclick="startGame()">Mulai Game</button>
+  </div>
+
+  <div class="quiz-box" style="display:none;">
+    <h2 id="levelTitle">Level 1: Portal Awal</h2>
+    <div class="question" id="question"></div>
+    <div id="options"></div>
+    <button onclick="nextQuestion()">Lanjut</button>
+  </div>
+
+  <div class="leaderboard" style="display:none;">
+    <h2>🏆 Leaderboard</h2>
+    <ul id="scores"></ul>
+    <button onclick="restart()">Main Lagi</button>
+  </div>
+</div>
+
+<audio id="bgm" loop>
+  <source src="https://cdn.pixabay.com/download/audio/2022/03/15/audio_16a91f8b3e.mp3?filename=ambient-synth-11170.mp3" type="audio/mpeg">
+</audio>
+
+<script>
+  // === STARFIELD BACKGROUND ===
+  const canvas = document.getElementById('space');
+  const ctx = canvas.getContext('2d');
+  canvas.width = innerWidth; 
+  canvas.height = innerHeight;
+
+  let stars = Array(150).fill().map(() => ({
+    x: Math.random()*canvas.width,
+    y: Math.random()*canvas.height,
+    z: Math.random()*canvas.width
+  }));
+
+  function drawStars(){
+    ctx.fillStyle = 'black';
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+    ctx.fillStyle = 'white';
+
+    stars.forEach(s => {
+      s.z -= 2;
+      if(s.z <= 0) s.z = canvas.width;
+
+      let k = 128 / s.z;
+      let px = s.x * k + canvas.width / 2;
+      let py = s.y * k + canvas.height / 2;
+
+      if(px>=0 && px<=canvas.width && py>=0 && py<=canvas.height){
+        let size = (1 - s.z/canvas.width) * 3;
+        ctx.fillRect(px,py,size,size);
+      }
+    });
+
+    requestAnimationFrame(drawStars);
+  }
+  drawStars();
+
+  // === QUIZ GAME LOGIC ===
+  let questions = [
+    {q:"Planet terbesar di tata surya?", o:["Bumi","Saturnus","Jupiter","Neptunus"], a:2},
+    {q:"Hasil 9 x 7 =", o:["63","56","72","67"], a:0},
+    {q:"Ibukota Jepang?", o:["Seoul","Tokyo","Beijing","Osaka"], a:1},
+    {q:"Air membeku pada suhu?", o:["0°C","100°C","10°C","-10°C"], a:0},
+    {q:"Siapa penemu bola lampu?", o:["Tesla","Edison","Newton","Einstein"], a:1},
+    {q:"Lambang unsur O adalah?", o:["Oksigen","Osmium","Oganesson","Ozone"], a:0}
+  ];
+
+  let current = 0, score = 0, player = "", avatar = "", level = 1;
+
+  function selectAvatar(el){
+    document.querySelectorAll('.avatar-select img').forEach(img => img.classList.remove('selected'));
+    el.classList.add('selected');
+    avatar = el.src;
+  }
+
+  function startGame(){
+    const bgm = document.getElementById('bgm');
+    bgm.volume = 0.4;
+    bgm.play();
+
+    player = document.getElementById('playerName').value;
+    if(!player){ 
+      alert("Masukkan nama dulu!");
+      return;
+    }
+
+    document.querySelector('.start-screen').style.display = 'none';
+    document.querySelector('.quiz-box').style.display = 'block';
+    loadQuestion();
+  }
+
+  function loadQuestion(){
+    const levelNames = ["Awal","Nebula","Nexus"];
+    document.getElementById('levelTitle').innerText = `Level ${level}: Portal ${levelNames[level-1] || "Final"}`;
+
+    let q = questions[Math.floor(Math.random()*questions.length)];
+
+    document.getElementById('question').innerText = q.q;
+
+    let optHTML = "";
+    q.o.forEach((opt,i) => {
+      optHTML += `<label class="option"><input type="radio" name="opt" value="${i}"> ${opt}</label>`;
+    });
+
+    document.getElementById('options').innerHTML = optHTML;
+    document.getElementById('options').dataset.correct = q.a;
+  }
+
+  function nextQuestion(){
+    let chosen = document.querySelector('input[name="opt"]:checked');
+    if(!chosen){
+      alert("Pilih jawaban!");
+      return;
+    }
+
+    if(chosen.value == document.getElementById('options').dataset.correct){
+      score += 10;
+      new Audio("https://cdn.pixabay.com/download/audio/2021/08/04/audio_190bb1f2e8.mp3?filename=success-1-6297.mp3").play();
+    } else {
+      new Audio("https://cdn.pixabay.com/download/audio/2021/09/01/audio_0f91bdb2db.mp3?filename=error-126627.mp3").play();
+    }
+
+    current++;
+
+    if(current % 3 === 0 && level < 3)
+      level++;
+
+    if(current >= 6){
+      endGame();
+    } else {
+      loadQuestion();
+    }
+  }
+
+  function endGame(){
+    document.querySelector('.quiz-box').style.display = 'none';
+    document.querySelector('.leaderboard').style.display = 'block';
+
+    let data = JSON.parse(localStorage.getItem('quizGalaxyScores') || "[]");
+
+    data.push({name: player, score});
+    data.sort((a,b) => b.score - a.score);
+    data = data.slice(0,5);
+
+    localStorage.setItem('quizGalaxyScores', JSON.stringify(data));
+
+    let html = "";
+    data.forEach((s,i) => {
+      html += `<li>${i+1}. ${s.name} – ${s.score}</li>`;
+    });
+
+    document.getElementById('scores').innerHTML = html;
+  }
+
+  function restart(){
+    current = 0;
+    score = 0;
+    level = 1;
+
+    document.querySelector('.leaderboard').style.display = 'none';
+    document.querySelector('.start-screen').style.display = 'block';
+  }
+
+</script>
+
+</body>
+</html>
